@@ -66,7 +66,7 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
             cut_model = load_model(cfg.model_type, data_dir).cuda()
             self.net = FeaturePyramidNet(cfg.granularity, cut_model, dim, cfg.continuous)
         elif cfg.arch == "dino":
-            self.net = DinoFeaturizer(dim, cfg)
+            self.net = DinoFeaturizer(dim, cfg) #This loads pretrained DINO weights from CFG
         else:
             raise ValueError("Unknown arch {}".format(cfg.arch))
 
@@ -443,8 +443,8 @@ def my_app(cfg: DictConfig) -> None:
         dataset_name=cfg.dataset_name,
         crop_type=None,
         image_set="val",
-        transform=get_transform(320, False, val_loader_crop),
-        target_transform=get_transform(320, True, val_loader_crop),
+        transform=get_transform(cfg.res, False, val_loader_crop), # transform=get_transform(320, False, val_loader_crop),
+        target_transform=get_transform(cfg.res, True, val_loader_crop), # target_transform=get_transform(320, True, val_loader_crop),
         mask=True,
         cfg=cfg,
     )
@@ -452,23 +452,46 @@ def my_app(cfg: DictConfig) -> None:
     #val_dataset = MaterializedDataset(val_dataset)
     train_loader = DataLoader(train_dataset, cfg.batch_size, shuffle=True, num_workers=cfg.num_workers, pin_memory=True)
 
-    if cfg.submitting_to_aml:
-        val_batch_size = 16
-    else:
-        val_batch_size = cfg.batch_size
-
+    # if cfg.submitting_to_aml:
+    #     val_batch_size = 16
+    # else:
+    #     val_batch_size = cfg.batch_size
+    val_batch_size = cfg.batch_size
+    ####
+    # dataset = torch.utils.data.Subset(dataset, list(range(subset_len)))
+    # subset_size = 0.00125
+    # subset_len = int(len(val_dataset)*subset_size)
+    # print('Validating with subset_len of: {}'.format(subset_len))
+    # val_dataset = torch.utils.data.Subset(val_dataset, list(range(subset_len)))
+    ####
     val_loader = DataLoader(val_dataset, val_batch_size, shuffle=False, num_workers=cfg.num_workers, pin_memory=True)
-
+    
+    #### NEED TO ADD FLAG FOR PRETRAINED STEGO WEIGHTS
+    # if cfg.stego_pretrained_weights:
+    #     saved_checkpoint = torch.load(cfg.stego_pretrained_weights)
+    #     print(saved_checkpoint.keys())
+    #     print('Loading pretrained model {}'.format(cfg.stego_pretrained_weights))
+    #     print("n_classes' : {}".format(saved_checkpoint["hyper_parameters"]['n_classes']))
+    #     for key in saved_checkpoint["hyper_parameters"]['cfg']:
+    #         print('{} : {}'.format(key,saved_checkpoint["hyper_parameters"]['cfg'][key]))
+    #     model = LitUnsupervisedSegmenter.load_from_checkpoint(saved_checkpoint).cuda()
+    #     # model =  LitUnsupervisedSegmenter(saved_checkpoint["hyper_parameters"]['n_classes'], saved_checkpoint["hyper_parameters"]['cfg'])
+    #     # model = model.load_state_dict(saved_checkpoint['state_dict'])
+    # else:
+    #     model = LitUnsupervisedSegmenter(train_dataset.n_classes, cfg)
+    ####
     model = LitUnsupervisedSegmenter(train_dataset.n_classes, cfg)
-
+    
     tb_logger = TensorBoardLogger(
         join(log_dir, name),
         default_hp_metric=False
     )
 
     if cfg.submitting_to_aml:
-        gpu_args = dict(gpus=1, val_check_interval=250)
-
+        print('Submitting to AML')
+        print('val_check_interval={}'.format(cfg.val_freq))
+        gpu_args = dict(gpus=1, val_check_interval=cfg.val_freq) #250
+        print()
         if gpu_args["val_check_interval"] > len(train_loader):
             gpu_args.pop("val_check_interval")
 
@@ -478,24 +501,38 @@ def my_app(cfg: DictConfig) -> None:
 
         if gpu_args["val_check_interval"] > len(train_loader) // 4:
             gpu_args.pop("val_check_interval")
-
+    print('Creating Trainer')
+    print('dirpath={}'.format(join(checkpoint_dir, name)))
+    print('Saving checkpoint every {} steps'.format(cfg.checkpoint_freq))
     trainer = Trainer(
+        default_root_dir = cfg.output_root,
         log_every_n_steps=cfg.scalar_log_freq,
         logger=tb_logger,
         max_steps=cfg.max_steps,
         callbacks=[
             ModelCheckpoint(
                 dirpath=join(checkpoint_dir, name),
-                every_n_train_steps=400,
-                save_top_k=2,
-                monitor="test/cluster/mIoU",
-                mode="max",
+                every_n_train_steps=cfg.checkpoint_freq, #400
+                save_top_k = -1,
+                # save_top_k=5,
+                # monitor="test/cluster/mIoU",
+                monitor="loss/cluster",
+                verbose=True,
+                # mode="max",
+                # mode="min"
             )
         ],
         **gpu_args
     )
+    print('Fitting Trainer')
     trainer.fit(model, train_loader, val_loader)
-
+    file_ext = '.ckpt'
+    checkpoint_end = join(checkpoint_dir, name)+'_full'+file_ext
+    print('Saving checkpoint end (full) to: {}'.format(checkpoint_end))
+    trainer.save_checkpoint(filepath=checkpoint_end,weights_only=False)
+    checkpoint_end = join(checkpoint_dir, name)+'_weights'+file_ext
+    print('Saving checkpoint end (weights_only) to: {}'.format(checkpoint_end))
+    trainer.save_checkpoint(filepath=checkpoint_end,weights_only=True)
 
 if __name__ == "__main__":
     prep_args()

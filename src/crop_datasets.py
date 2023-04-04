@@ -6,7 +6,9 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.utilities.seed import seed_everything
 from torch.utils.data import DataLoader
-from torchvision.transforms.functional import five_crop, _get_image_size, crop
+# from torchvision.transforms.functional import five_crop, _get_image_size, crop
+from torchvision.transforms.functional import five_crop, get_image_size, crop
+
 from tqdm import tqdm
 from torch.utils.data import Dataset
 
@@ -77,7 +79,7 @@ class RandomCropComputer(Dataset):
         self.pytorch_data_dir = cfg.pytorch_data_dir
         self.crop_ratio = crop_ratio
         self.save_dir = join(
-            cfg.pytorch_data_dir, "cropped", "{}_{}_crop_{}".format(dataset_name, crop_type, crop_ratio))
+            cfg.pytorch_data_dir, "cropped", "{}_{}_crop_{}_{}_{}".format(dataset_name, crop_type, crop_ratio, cfg.res, cfg.num_neighbors))
         self.img_set = img_set
         self.dataset_name = dataset_name
         self.cfg = cfg
@@ -137,10 +139,21 @@ def my_app(cfg: DictConfig) -> None:
     # crop_types = ["five","random"]
     # crop_ratios = [.5, .7]
 
-    dataset_names = ["cityscapes"]
+    # dataset_names = ["cityscapes"]
+    # img_sets = ["train", "val"]
+    # crop_types = ["five"]
+    # crop_ratios = [.5]
+
+    dataset_names = [cfg.dataset_name]
     img_sets = ["train", "val"]
-    crop_types = ["five"]
-    crop_ratios = [.5]
+    crop_types = [cfg.crop_type]
+    crop_ratios = [cfg.crop_ratio]
+    
+    print('Dataset parameters')
+    print('dataset_names {}'.format(dataset_names))
+    print('img_sets: {} (HARD CODED IN SCRIPT)'.format(img_sets))
+    print('crop_types: {}'.format(crop_types))
+    print('crop_ratios: {}'.format(crop_ratios))
 
     for crop_ratio in crop_ratios:
         for crop_type in crop_types:

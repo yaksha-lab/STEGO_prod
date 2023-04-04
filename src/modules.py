@@ -4,6 +4,7 @@ from utils import *
 import torch.nn.functional as F
 import dino.vision_transformer as vits
 
+import sys
 
 class LambdaLayer(nn.Module):
     def __init__(self, lambd):
@@ -83,9 +84,23 @@ class DinoFeaturizer(nn.Module):
     def forward(self, img, n=1, return_class_feat=False):
         self.model.eval()
         with torch.no_grad():
-            assert (img.shape[2] % self.patch_size == 0)
-            assert (img.shape[3] % self.patch_size == 0)
-
+            try:
+                assert (img.shape[2] % self.patch_size == 0)
+                assert (img.shape[3] % self.patch_size == 0)
+            except Exception as e:
+                print(e)
+                print('self.patch_size = {}, image dimensions must be divisible by patch size'.format(self.patch_size))
+                print('img.shape = {}'.format(img.shape))
+                
+                # https://stackoverflow.com/questions/2403631/how-do-i-find-the-next-multiple-of-10-of-any-integer
+                if (img.shape[2] % self.patch_size) != 0:
+                    new_dim = img.shape[2] + (self.patch_size - img.shape[2] % self.patch_size)
+                    print('assert img.shape[2] % self.patch_size = {}, should be 0, try {}'.format((img.shape[2] % self.patch_size),new_dim))
+                if (img.shape[3] % self.patch_size) != 0:
+                    new_dim = img.shape[3] + (self.patch_size - img.shape[3] % self.patch_size)
+                    print('assert img.shape[3] % self.patch_size = {}, should be 0, try {}'.format((img.shape[3] % self.patch_size),new_dim))
+                sys.exit(1)
+            
             # get selected layer activations
             feat, attn, qkv = self.model.get_intermediate_feat(img, n=n)
             feat, attn, qkv = feat[0], attn[0], qkv[0]

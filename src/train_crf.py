@@ -8,6 +8,8 @@ from torch.nn import Sequential, Linear, LogSoftmax
 from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor
 from utils import *
+from modules import *
+from data import *
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import numpy as np
@@ -32,27 +34,57 @@ def entropy(p):
     return -(p * torch.log(p)).sum(dim=1)
 
 
-@hydra.main(config_name="config.yml")
+@hydra.main(config_path="configs", config_name="train_config.yml")
 def my_app(cfg: DictConfig) -> None:
+    OmegaConf.set_struct(cfg, False)
     print(OmegaConf.to_yaml(cfg))
     pytorch_data_dir = cfg.pytorch_data_dir
     log_dir = join(cfg.output_root, "logs")
     continuous = cfg.continuous
     dim = cfg.dim
     dataset_name = cfg.dataset_name
-    n_images = 7
-
+    n_images = cfg.n_images
+    chosen_imageset = 'train'
+    
     np.random.seed(0)
     torch.random.manual_seed(0)
 
-    small_imsize = imsize // 2
+    small_imsize = cfg.res // 2
     transform_with_resize = T.Compose([T.Resize((small_imsize, small_imsize)), T.ToTensor(), normalize])
     label_transform_with_resize = T.Compose([T.Resize((small_imsize, small_imsize)), ToTargetTensor()])
-
+    
+    # dataset = ContrastiveSegDataset(
+    #     pytorch_data_dir, dataset_name, "train+val", cfg.num_neighbors,
+    #     transform_with_resize, label_transform_with_resize, None, None, cfg=cfg, num_neighbors=cfg.num_neighbors)
+    
     dataset = ContrastiveSegDataset(
-        pytorch_data_dir, dataset_name, "train+val", cfg.num_neighbors,
-        transform_with_resize, label_transform_with_resize, None, None, cfg)
-
+        pytorch_data_dir, 
+        dataset_name,
+        crop_type=cfg.crop_type,
+        image_set=chosen_imageset,
+        transform=transform_with_resize, 
+        target_transform=label_transform_with_resize, 
+        cfg=cfg)
+    
+    # def __init__(self,
+    #              pytorch_data_dir,
+    #              dataset_name,
+    #              crop_type,
+    #              image_set,
+    #              transform,
+    #              target_transform,
+    #              cfg,
+    #              aug_geometric_transform=None,
+    #              aug_photometric_transform=None,
+    #              num_neighbors=5,
+    #              compute_knns=False,
+    #              mask=False,
+    #              pos_labels=False,
+    #              pos_images=False,
+    #              extra_transform=None,
+    #              model_type_override=None
+    #              ):
+    
     prefix = "crf/{}_{}".format(cfg.dataset_name, cfg.experiment_name)
     writer = SummaryWriter(
         join(log_dir, '{}_date_{}'.format(prefix, datetime.now().strftime("%m:%d:%Y:%H:%M"))))

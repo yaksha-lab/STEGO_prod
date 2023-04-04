@@ -12,6 +12,7 @@ from torchvision.datasets.cityscapes import Cityscapes
 from torchvision.transforms.functional import to_pil_image
 from tqdm import tqdm
 
+import sys
 
 def bit_get(val, idx):
     """Gets the bit value.
@@ -436,7 +437,7 @@ class ContrastiveSegDataset(Dataset):
                  model_type_override=None
                  ):
         super(ContrastiveSegDataset).__init__()
-        self.num_neighbors = num_neighbors
+        self.num_neighbors = cfg.num_neighbors
         self.image_set = image_set
         self.dataset_name = dataset_name
         self.mask = mask
@@ -500,15 +501,21 @@ class ContrastiveSegDataset(Dataset):
             model_type = cfg.model_type
 
         nice_dataset_name = cfg.dir_dataset_name if dataset_name == "directory" else dataset_name
-        feature_cache_file = join(pytorch_data_dir, "nns", "nns_{}_{}_{}_{}_{}.npz".format(
-            model_type, nice_dataset_name, image_set, crop_type, cfg.res))
+        feature_cache_file = join(pytorch_data_dir, "nns", "nns_{}_{}_{}_{}_{}_{}_{}.npz".format(
+            # cfg.model_type, nice_dataset_name, image_set, crop_type, res, n_batches, num_neighbors)
+            model_type, nice_dataset_name, image_set, crop_type, cfg.res, cfg.batch_size, cfg.num_neighbors))
         if pos_labels or pos_images:
             if not os.path.exists(feature_cache_file) or compute_knns:
                 raise ValueError("could not find nn file {} please run precompute_knns".format(feature_cache_file))
             else:
                 loaded = np.load(feature_cache_file)
                 self.nns = loaded["nns"]
-            assert len(self.dataset) == self.nns.shape[0]
+            try:
+                assert len(self.dataset) == self.nns.shape[0]
+            except:
+                print('assert len(self.dataset) == self.nns.shape[0] failed')
+                print('len(self.dataset) = {}, self.nns.shape[0] = {}'.format(len(self.dataset),self.nns.shape[0]))
+                sys.exit(1)
 
     def __len__(self):
         return len(self.dataset)
