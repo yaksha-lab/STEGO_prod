@@ -457,31 +457,11 @@ def my_app(cfg: DictConfig) -> None:
     # else:
     #     val_batch_size = cfg.batch_size
     val_batch_size = cfg.batch_size
-    ####
-    # dataset = torch.utils.data.Subset(dataset, list(range(subset_len)))
-    # subset_size = 0.00125
-    # subset_len = int(len(val_dataset)*subset_size)
-    # print('Validating with subset_len of: {}'.format(subset_len))
-    # val_dataset = torch.utils.data.Subset(val_dataset, list(range(subset_len)))
-    ####
+
     val_loader = DataLoader(val_dataset, val_batch_size, shuffle=False, num_workers=cfg.num_workers, pin_memory=True)
-    
-    #### NEED TO ADD FLAG FOR PRETRAINED STEGO WEIGHTS
-    # if cfg.stego_pretrained_weights:
-    #     saved_checkpoint = torch.load(cfg.stego_pretrained_weights)
-    #     print(saved_checkpoint.keys())
-    #     print('Loading pretrained model {}'.format(cfg.stego_pretrained_weights))
-    #     print("n_classes' : {}".format(saved_checkpoint["hyper_parameters"]['n_classes']))
-    #     for key in saved_checkpoint["hyper_parameters"]['cfg']:
-    #         print('{} : {}'.format(key,saved_checkpoint["hyper_parameters"]['cfg'][key]))
-    #     model = LitUnsupervisedSegmenter.load_from_checkpoint(saved_checkpoint).cuda()
-    #     # model =  LitUnsupervisedSegmenter(saved_checkpoint["hyper_parameters"]['n_classes'], saved_checkpoint["hyper_parameters"]['cfg'])
-    #     # model = model.load_state_dict(saved_checkpoint['state_dict'])
-    # else:
-    #     model = LitUnsupervisedSegmenter(train_dataset.n_classes, cfg)
-    ####
+
     model = LitUnsupervisedSegmenter(train_dataset.n_classes, cfg)
-    
+
     tb_logger = TensorBoardLogger(
         join(log_dir, name),
         default_hp_metric=False
@@ -515,8 +495,8 @@ def my_app(cfg: DictConfig) -> None:
                 every_n_train_steps=cfg.checkpoint_freq, #400
                 save_top_k = -1,
                 # save_top_k=5,
-                # monitor="test/cluster/mIoU",
-                monitor="loss/cluster",
+                monitor="test/cluster/mIoU",
+                # monitor="loss/cluster",
                 verbose=True,
                 # mode="max",
                 # mode="min"

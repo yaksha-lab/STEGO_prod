@@ -47,20 +47,18 @@ def my_app(cfg: DictConfig) -> None:
     # dataset_names = ["directory"]
     # crop_types = ["five"]
     # crop_ratios = [.1]
-    
+
     dataset_names = [cfg.dataset_name]
     image_sets = ["train", "val"]
     crop_types = [cfg.crop_type]
     crop_ratios = [cfg.crop_ratio]
-    
+
     print('Dataset parameters')
     print('dataset_names {}'.format(dataset_names))
     print('image_sets: {} (HARD CODED IN SCRIPT)'.format(image_sets))
     print('crop_types: {}'.format(crop_types))
     print('crop_ratios: {}'.format(crop_ratios))
 
-    # res = 224
-    # n_batches = 16
     res = cfg.res
     n_batches = cfg.batch_size
 
@@ -95,12 +93,9 @@ def my_app(cfg: DictConfig) -> None:
                         target_transform=get_transform(res, True, "center"),
                         cfg=cfg,
                     )
+
                     print('Creating Dataloader for ContrastiveSegDataset')
-                    # torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=None, 
-                    # sampler=None, batch_sampler=None, num_workers=0, collate_fn=None, 
-                    # pin_memory=False, drop_last=False, timeout=0, 
-                    # worker_init_fn=None, multiprocessing_context=None, generator=None, *, 
-                    # prefetch_factor=None, persistent_workers=False, pin_memory_device='')
+                    
                     loader = DataLoader(dataset, cfg.batch_size, shuffle=False, num_workers=cfg.num_workers, pin_memory=False)
                     print('DataLoader has len {}'.format(len(loader)))
                     with torch.no_grad():

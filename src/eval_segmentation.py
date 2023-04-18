@@ -57,7 +57,9 @@ def batched_crf(pool, img_tensor, prob_tensor):
 @hydra.main(config_path="configs", config_name="eval_config.yml")
 def my_app(cfg: DictConfig) -> None:
     pytorch_data_dir = cfg.pytorch_data_dir
-    result_dir = "../results/predictions/{}".format(cfg.experiment_name)
+    result_dir = "results/predictions/{}".format(cfg.experiment_name)
+    result_dir = os.path.join(cfg.output_root,result_dir)
+    print(result_dir)
     os.makedirs(join(result_dir, "img"), exist_ok=True)
     os.makedirs(join(result_dir, "label"), exist_ok=True)
     os.makedirs(join(result_dir, "cluster"), exist_ok=True)
@@ -109,12 +111,15 @@ def my_app(cfg: DictConfig) -> None:
             # all_good_images = range(80)
             # all_good_images = [ 5, 20, 56]
             all_good_images = [11, 32, 43, 52]
+        elif model.cfg.dataset_name == "directory":
+            all_good_images = [19, 54, 67, 66, 65, 75, 77, 76, 124]
         else:
             raise ValueError("Unknown Dataset {}".format(model.cfg.dataset_name))
         batch_nums = torch.tensor([n // (cfg.batch_size * 2) for n in all_good_images])
         batch_offsets = torch.tensor([n % (cfg.batch_size * 2) for n in all_good_images])
 
         saved_data = defaultdict(list)
+        print("Generating Predictions")
         with Pool(cfg.num_workers + 5) as pool:
             for i, batch in enumerate(tqdm(test_loader)):
                 with torch.no_grad():
@@ -126,24 +131,29 @@ def my_app(cfg: DictConfig) -> None:
                     code = (code1 + code2.flip(dims=[3])) / 2
 
                     code = F.interpolate(code, label.shape[-2:], mode='bilinear', align_corners=False)
-
+                    
+                    print('Getting Probs: {}'.format(i))
                     linear_probs = torch.log_softmax(model.linear_probe(code), dim=1)
                     cluster_probs = model.cluster_probe(code, 2, log_probs=True)
-
+                    
+                    print('Running crf: {}'.format(i))
                     if cfg.run_crf:
                         linear_preds = batched_crf(pool, img, linear_probs).argmax(1).cuda()
                         cluster_preds = batched_crf(pool, img, cluster_probs).argmax(1).cuda()
                     else:
                         linear_preds = linear_probs.argmax(1)
                         cluster_preds = cluster_probs.argmax(1)
-
+                    
+                    print('Updating metrics: {}'.format(i))
                     model.test_linear_metrics.update(linear_preds, label)
                     model.test_cluster_metrics.update(cluster_preds, label)
-
+                    
+                    print('Running picie: {}'.format(i))
                     if run_picie:
                         picie_preds = picie_cluster_metrics.map_clusters(
                             picie_cluster_probe(par_picie(img), None)[1].argmax(1).cpu())
-
+                    
+                    print('Saving data: {}'.format(i))
                     if i in batch_nums:
                         matching_offsets = batch_offsets[torch.where(batch_nums == i)]
                         for offset in matching_offsets:
@@ -153,6 +163,7 @@ def my_app(cfg: DictConfig) -> None:
                             saved_data["img"].append(img.cpu()[offset].unsqueeze(0))
                             if run_picie:
                                 saved_data["picie_preds"].append(picie_preds.cpu()[offset].unsqueeze(0))
+        print('Reformatting Prediction Data')
         saved_data = {k: torch.cat(v, dim=0) for k, v in saved_data.items()}
 
         tb_metrics = {
@@ -174,7 +185,7 @@ def my_app(cfg: DictConfig) -> None:
 
         if cfg.dark_mode:
             plt.style.use('dark_background')
-
+        print('Generating Plots')
         for good_images in batch_list(range(len(all_good_images)), 10):
             fig, ax = plt.subplots(n_rows, len(good_images), figsize=(len(good_images) * 3, n_rows * 3))
             for i, img_num in enumerate(good_images):
