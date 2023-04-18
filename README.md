@@ -1,3 +1,4 @@
+This repository makes STEGO "productionized" in that it can repeatedly train models from a train_config in a google colab environment.
 Forked in support of Master of Applied Data Science capstone: https://github.com/yaksha-lab/explorers_algal_blooms_capstone
 
 # STEGO: Unsupervised Semantic Segmentation by Distilling Feature Correspondences
